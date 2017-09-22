@@ -1,0 +1,2 @@
+# CrudosBot
+A discord bot
