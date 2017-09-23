@@ -1,0 +1,11 @@
+{
+  "name": "CrudosBot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bot.js",
+  "author": "Crudos",
+  "dependencies": {
+    "winston": "~2.3.1",
+    "discord.io": "~2.5.2"
+  }
+}
