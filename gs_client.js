@@ -1,4 +1,6 @@
-// Google Sheets Client
+/**
+  Google Sheets Client
+*/
 let fs = require('fs');
 let log = require('winston');
 let readline = require('readline');
@@ -13,7 +15,7 @@ let TOKEN_PATH = TOKEN_DIR + 'sheets.googleapis.com-nodejs-crudosbot.json';
 /**
  * Init auth client and make GS call
  */
-exports.call = function(parameters, func) {
+exports.call = function(parameters, callback) {
    return new Promise(function (fulfill, reject) {
       fs.readFile('client_secret.json', function processClientSecrets(err, content) {
          if(err) {
@@ -38,15 +40,18 @@ exports.call = function(parameters, func) {
 
             let params = parameters;
             params['auth'] = oauth2Client;
-            func(params).then(fulfill);
+            callback(params).then(fulfill);
          });
       });
    });
 }
 
-/** Get call **/
+/**
+  Get
+  returns a promise
+**/
 exports.get = function(params) {
-   log.info('GS - GET');
+   log.info('GoogleSheets - GET');
 
    return new Promise(function (fulfill, reject) {
       let sheets = google.sheets('v4');
@@ -61,13 +66,16 @@ exports.get = function(params) {
    });
 }
 
-/** Update call **/
+/**
+  Update
+  returns a promise
+**/
 exports.update = function(params) {
-   log.info('GS - UPDATE');
+   log.info('GoogleSheets - UPDATE');
 
    return new Promise(function (fulfill, reject) {
       let sheets = google.sheets('v4');
-      sheets.spreadsheets.values.update(params, function(err, result) {
+      sheets.spreadsheets.values.batchUpdate(params, function(err, result) {
          if(err) {
             log.error(err);
             reject(err);

@@ -2,6 +2,7 @@ let Discord = require('discord.io');
 let log = require('winston');
 let auth = require('./auth.json');
 let gs_client = require('./gs_client.js');
+let discord_formatter = require('./discord_formatter.js');
 
 log.remove(log.transports.Console);
 log.add(log.transports.Console, {
@@ -30,15 +31,15 @@ bot.on('message', function (user, userID, channelID, message, evt) {
       channelID: channelID,
       message: message,
       evt: evt
-   }
+   };
 
    if(message.substring(0, 1) == '.') {
-      data['args'] = message.substring(1).split(' ');
-      data['cmd'] = data.args[0];
+      data.args = message.substring(1).split(' ');
+      data.command = data.args[0];
       let messageData = user + ' ' + userID + ' ' + channelID + ' ' + message + ' ' + evt;
-      log.info(messageData)
+      log.info(messageData);
 
-      switch(data['cmd']) {
+      switch(data.command) {
          case 'ping':
             if(user == 'crudos')  {
                bot.sendMessage({ to: channelID, message: 'ok' });
@@ -59,13 +60,25 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
 /** GEAR SCORE COMMANDS **/
 
-let GEAR_SCORE_SPREADSHEET_ID = '1BDDFVjVa9S7c-kZd2U9a9tsnPk0otUAuM7p-UoiS-3A'
+let GEAR_SCORE_SPREADSHEET_ID = '1BDDFVjVa9S7c-kZd2U9a9tsnPk0otUAuM7p-UoiS-3A';
 let GEAR_SCORE_SPREADSHEET_RANGE = 'Gear';
 
 function gearCommand(data) {
-   switch(data.args[1]) {
+   log.debug('gearCommand');
+   let userMessage = data.message;
+   data.subCommand = data.args[1];
+
+   if (data.subCommand == null) {
+      helpCommand(data);
+      return;
+   }
+
+   data.cmdArgs = userMessage.substring(
+      userMessage.indexOf(data.subCommand) + data.subCommand.length);
+
+   switch(data.subCommand) {
       case 'show':
-         getGear(data, true);
+         showGear(data);
          break;
       case 'update':
          updateGear(data);
@@ -76,7 +89,8 @@ function gearCommand(data) {
    }
 }
 
-function getGear(data, print=false) {
+function getGear(data, params) {
+   log.debug('getGear');
    let getParams = {
       spreadsheetId: GEAR_SCORE_SPREADSHEET_ID,
       range: GEAR_SCORE_SPREADSHEET_RANGE,
@@ -85,9 +99,10 @@ function getGear(data, print=false) {
    return new Promise(function (fulfill, reject) {
       let promise = gs_client.call(getParams, gs_client.get);
       promise.then(function(result) {
-         if (print) {
-            gearMessage(data, result);
+         if (params.findUser) {
+            findUser(data, result);
          }
+
          fulfill(result);
       }, function(err) {
          log.error('Error in getGear')
@@ -96,22 +111,57 @@ function getGear(data, print=false) {
    });
 }
 
-function gearMessage(data, valueRange) {
-   let msg = '';
+function gearMessage(data) {
+   let table = discord_formatter.table({ data: data.values, });
 
-   valueRange.values.forEach(function(row) {
-      let rowMsg = '';
-      row.forEach(function(col) {
-         rowMsg += col + '\t\t';
-      })
-      msg += rowMsg.trim() + '\n';
+   bot.sendMessage({ to: data.channelID, message: table.getMessage() });
+}
+
+function findUser(data, result) {
+   let sheetArray = result.values;
+   let userLowerCase = data.user.toLowerCase();
+   let rowNum = 0;
+
+   for (i = 0; i < sheetArray.length; i++) {
+      if (sheetArray[i][0].toLowerCase() == userLowerCase) {
+         data.userRow = i;
+      }
+   }
+
+   if (data.userRow == null) {
+      log.debug('No user matched');
+   } else {
+      log.debug('User matched at row ' + data.userRow);
+   }
+
+}
+
+function showGear(data) {
+   log.debug('showGear');
+   let showAll = data.args[2] && data.args[2].indexOf('all') != -1;
+   let promise = getGear(data, { findUser: !showAll });
+
+   promise.then(function(result) {
+      log.debug(data);
+
+      data.values = result.values;
+
+      if (!showAll) {
+         data.values = [
+            result.values[0],
+            result.values[data.userRow]
+         ];
+      }
+
+      gearMessage(data);
+   }, function(err) {
+      log.error('getGear failed: ' + err);
    });
-
-   bot.sendMessage({ to: data.channelID, message: msg.trim() });
 }
 
 function updateGear(data) {
-   let promise = getGear(data);
+   log.debug('updateGear');
+   let promise = getGear(data, { findUser: true });
 
    promise.then(function(result) {
       if (!result) {
@@ -119,76 +169,91 @@ function updateGear(data) {
          return;
       }
 
-      let sheetArray = result.values;
-      let userLowerCase = data.user.toLowerCase();
-      let userRow = null;
-      let rowNum = 0;
-
-      for (i = 0; i < sheetArray.length; i++) {
-         if (sheetArray[i][0].toLowerCase() == userLowerCase) {
-            userRow = i;
-         }
-      }
-
-      let userMessage = data.message;
-      let updateInfo = userMessage.substring(userMessage.indexOf(data['args'][1]) + data['args'][1].length);
-
-      if (updateInfo.length == 0) {
+      // no arguments for this command
+      if (data.cmdArgs.length == 0) {
          helpCommand(data);
          return;
       }
 
-      log.info(updateInfo);
-      let sheetColumns = {
-         ap: 1,
-         awk: 2,
-         dp: 3
+      let gs_col = {
+         player: 'A',
+         ap: 'B',
+         awk: 'C',
+         dp: 'D',
+         gs: 'E',
+         awkgs: 'F'
       }
 
-      log.info(sheetColumns.ap);
+      let sheetUpdate = [];
+      let userSheetRow = data.userRow + 1;
 
-      let sheetUpdate = result;
+      // new user to add
+      if (data.userRow == null) {
+         userSheetRow = result.values.length + 1;
+         sheetUpdate.push({
+            range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.gs + userSheetRow + ':' + gs_col.awkgs + userSheetRow,
+            values: [[ // gear score functions
+               '=SUM(' + gs_col.ap + userSheetRow + ',' + gs_col.dp + userSheetRow + ')',
+               '=SUM(' + gs_col.awk + userSheetRow + ',' + gs_col.dp + userSheetRow + ')']]
+         });
+         sheetUpdate.push({
+            range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.player + userSheetRow,
+            values: [[data.user]]
+         })
+      }
+
       let regex = /(\D+)(\d+)/gi;
       let updateMatch;
-      while ((updateMatch = regex.exec(updateInfo)) !== null) {
+      while ((updateMatch = regex.exec(data.cmdArgs)) !== null) {
          let statKey = updateMatch[1];
          let statVal = updateMatch[2];
          let columnToUpdate;
 
          if (statKey.indexOf('ap') != -1) {
-            columnToUpdate = sheetColumns.ap;
+            columnToUpdate = gs_col.ap;
          } else if (statKey.indexOf('awk') != -1) {
-            columnToUpdate = sheetColumns.awk;
+            columnToUpdate = gs_col.awk;
          } else if (statKey.indexOf('dp') != -1) {
-            columnToUpdate = sheetColumns.dp;
+            columnToUpdate = gs_col.dp;
          }
 
          if (columnToUpdate) {
-            sheetUpdate.values[userRow][columnToUpdate] = statVal;
+            sheetUpdate.push({
+               range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + columnToUpdate + userSheetRow,
+               values: [[statVal]]
+            });
          }
       }
 
-      log.info('found user at ' + userRow);
-      log.info(sheetUpdate.values);
-
       let updateParams = {
          spreadsheetId: GEAR_SCORE_SPREADSHEET_ID,
-         range: GEAR_SCORE_SPREADSHEET_RANGE,
-         valueInputOption: 'USER_ENTERED',
-         resource: { values: sheetUpdate.values }
+         resource: {
+            valueInputOption: 'USER_ENTERED',
+            data: sheetUpdate
+         }
       }
 
-      gs_client.call(updateParams, gs_client.update).then(log.info);
+      gs_client.call(updateParams, gs_client.update).then(function(result) {
+         log.debug('succeeded gs update call: ' + result.toString());
+         bot.addReaction('👌');
+      }, function(err) {
+         log.error('failed gs update call: ' + err);
+         bot.addReaction('❌');
+      });
    });
 }
 
 function helpCommand(data) {
    let helpMessage =
-      'Usage: .gear <COMMAND>\n' +
-      '\tshow                  Display gear for players\n' +
-      '\tupdate                Update your gear\n' +
-      '\t\t -ap, --attack Set ap\n' +
-      '\t\t -awk, --awakening Set awakening ap\n' +
-      '\t\t -dp, --defense Set dp';
+      '```\n'+
+      'Usage: .gear <command> <arguments>\n\n' +
+      ' Commands:\n' +
+      ' show                          Display gear for players, default will only show your own gear\n' +
+      '\t all - show all users\n' +
+      ' update [<stat> <value>]...    Update your gear, include all stats to update.\n' +
+      '\t ap - AP\n' +
+      '\t awk - Awakening AP\n' +
+      '\t dp - DP\n' +
+      '```';
    bot.sendMessage({ to: data.channelID, message: helpMessage });
 }
