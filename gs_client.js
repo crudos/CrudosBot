@@ -13,10 +13,10 @@ let TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH ||
 let TOKEN_PATH = TOKEN_DIR + 'sheets.googleapis.com-nodejs-crudosbot.json';
 
 /**
- * Init auth client and make GS call
+ * Base Google Sheets call. Performs intial authorization
  */
-exports.call = function(parameters, callback) {
-   return new Promise(function (fulfill, reject) {
+exports.call = (parameters, callback) => {
+   return new Promise((fulfill, reject) => {
       fs.readFile('client_secret.json', function processClientSecrets(err, content) {
          if(err) {
             console.log('Error loading client secret file: ' + err);
@@ -31,7 +31,7 @@ exports.call = function(parameters, callback) {
          let oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
 
          // Check if we have previously stored a token.
-         fs.readFile(TOKEN_PATH, function(err, token) {
+         fs.readFile(TOKEN_PATH, (err, token) => {
             if(err) {
                getNewToken(oauth2Client, callback);
             } else {
@@ -50,12 +50,12 @@ exports.call = function(parameters, callback) {
   Get
   returns a promise
 **/
-exports.get = function(params) {
+exports.get = params => {
    log.info('GoogleSheets - GET');
 
-   return new Promise(function (fulfill, reject) {
+   return new Promise((fulfill, reject) => {
       let sheets = google.sheets('v4');
-      sheets.spreadsheets.values.get(params, function(err, result) {
+      sheets.spreadsheets.values.get(params, (err, result) => {
          if(err) {
             log.error(err);
             reject(err);
@@ -70,12 +70,12 @@ exports.get = function(params) {
   Update
   returns a promise
 **/
-exports.update = function(params) {
+exports.update = params => {
    log.info('GoogleSheets - UPDATE');
 
-   return new Promise(function (fulfill, reject) {
+   return new Promise((fulfill, reject) => {
       let sheets = google.sheets('v4');
-      sheets.spreadsheets.values.batchUpdate(params, function(err, result) {
+      sheets.spreadsheets.values.batchUpdate(params, (err, result) => {
          if(err) {
             log.error(err);
             reject(err);
@@ -136,73 +136,3 @@ function storeToken(token) {
    fs.writeFile(TOKEN_PATH, JSON.stringify(token));
    console.log('Token stored to ' + TOKEN_PATH);
 }
-
-
-
-/**
-// Load client secrets from a local file.
-fs.readFile('client_secret.json', function processClientSecrets(err, content) {
- if(err) {
-  console.log('Error loading client secret file: ' + err);
-  return;
-}
-  // Authorize a client with the loaded credentials, then call the
-  // Google Sheets API.
-  authorize(JSON.parse(content), listMajors);
-});
-**/
-
-/**
- * Create an OAuth2 client with the given credentials, and then execute the
- * given callback function.
- *
- * @param {Object} credentials The authorization client credentials.
- * @param {function} callback The callback to call with the authorized client.
- */
- function authorize(credentials, callback) {
-    let clientSecret = credentials.installed.client_secret;
-    let clientId = credentials.installed.client_id;
-    let redirectUrl = credentials.installed.redirect_uris[0];
-    let auth = new googleAuth();
-    let oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
-
-  // Check if we have previously stored a token.
-  fs.readFile(TOKEN_PATH, function(err, token) {
-     if(err) {
-      getNewToken(oauth2Client, callback);
-   } else {
-      oauth2Client.credentials = JSON.parse(token);
-      callback(oauth2Client);
-   }
-});
-}
-
-/**
- * Print the names and majors of students in a sample spreadsheet:
- * https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
- */
- function listMajors(auth) {
-    let sheets = google.sheets('v4');
-    sheets.spreadsheets.values.get({
-     auth: auth,
-     spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
-     range: 'Class Data!A2:E',
-  }, function(err, response) {
-     if(err) {
-      console.log('The API returned an error: ' + err);
-      return;
-   }
-   let rows = response.values;
-   if(rows.length == 0) {
-      console.log('No data found.');
-   } else {
-      console.log('Name, Major:');
-      for (let i = 0; i < rows.length; i++) {
-       let row = rows[i];
-        // Print columns A and E, which correspond to indices 0 and 4.
-        console.log('%s, %s', row[0], row[4]);
-     }
-  }
-});
- }
-

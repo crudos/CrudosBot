@@ -15,12 +15,12 @@ let bot = new Discord.Client({
    autorun: true
 });
 
-bot.on('ready', function (evt) {
+bot.on('ready', event => {
    log.info('Logged in as: ');
    log.info(bot.username + ' - (' + bot.id + ')');
 });
 
-bot.on('message', function (user, userID, channelID, message, evt) {
+bot.on('message', (user, userID, channelID, message, event) => {
    if(message == 'good job') {
       bot.sendMessage({ to: channelID, message: 'thanks' });
    }
@@ -29,15 +29,14 @@ bot.on('message', function (user, userID, channelID, message, evt) {
       user: user,
       userID: userID,
       channelID: channelID,
+      messageID: event.d.id,
       message: message,
-      evt: evt
    };
 
    if(message.substring(0, 1) == '.') {
+      log.info(user + ' ' + userID + ' ' + channelID + ' ' + message + ' ' + event);
       data.args = message.substring(1).split(' ');
       data.command = data.args[0];
-      let messageData = user + ' ' + userID + ' ' + channelID + ' ' + message + ' ' + evt;
-      log.info(messageData);
 
       switch(data.command) {
          case 'ping':
@@ -52,7 +51,6 @@ bot.on('message', function (user, userID, channelID, message, evt) {
             helpCommand(data);
             break;
          default:
-            helpCommand(data);
             break;
       }
    }
@@ -96,15 +94,15 @@ function getGear(data, params) {
       range: GEAR_SCORE_SPREADSHEET_RANGE,
    };
 
-   return new Promise(function (fulfill, reject) {
+   return new Promise((fulfill, reject) => {
       let promise = gs_client.call(getParams, gs_client.get);
-      promise.then(function(result) {
+      promise.then(result => {
          if (params.findUser) {
             findUser(data, result);
          }
 
          fulfill(result);
-      }, function(err) {
+      }, err => {
          log.error('Error in getGear')
          reject(err);
       });
@@ -141,7 +139,7 @@ function showGear(data) {
    let showAll = data.args[2] && data.args[2].indexOf('all') != -1;
    let promise = getGear(data, { findUser: !showAll });
 
-   promise.then(function(result) {
+   promise.then(result => {
       log.debug(data);
 
       data.values = result.values;
@@ -154,7 +152,7 @@ function showGear(data) {
       }
 
       gearMessage(data);
-   }, function(err) {
+   }, err => {
       log.error('getGear failed: ' + err);
    });
 }
@@ -163,7 +161,7 @@ function updateGear(data) {
    log.debug('updateGear');
    let promise = getGear(data, { findUser: true });
 
-   promise.then(function(result) {
+   promise.then(result => {
       if (!result) {
          log.error('Error on updateGear: no sheet data');
          return;
@@ -190,12 +188,14 @@ function updateGear(data) {
       // new user to add
       if (data.userRow == null) {
          userSheetRow = result.values.length + 1;
+         // gear score functions
          sheetUpdate.push({
             range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.gs + userSheetRow + ':' + gs_col.awkgs + userSheetRow,
-            values: [[ // gear score functions
+            values: [[
                '=SUM(' + gs_col.ap + userSheetRow + ',' + gs_col.dp + userSheetRow + ')',
                '=SUM(' + gs_col.awk + userSheetRow + ',' + gs_col.dp + userSheetRow + ')']]
          });
+         // player name
          sheetUpdate.push({
             range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.player + userSheetRow,
             values: [[data.user]]
@@ -233,13 +233,18 @@ function updateGear(data) {
          }
       }
 
-      gs_client.call(updateParams, gs_client.update).then(function(result) {
-         log.debug('succeeded gs update call: ' + result.toString());
-         bot.addReaction('👌');
-      }, function(err) {
-         log.error('failed gs update call: ' + err);
-         bot.addReaction('❌');
+      gs_client.call(updateParams, gs_client.update).then(result => {
+         log.debug('succeeded gs update call:');
+         log.debug(result);
+         bot.addReaction({ channelID: data.channelID, messageID: data.messageID, reaction: '👌' });
+      }, err => {
+         log.error('failed gs update call:');
+         log.error(err);
+         bot.addReaction({ channelID: data.channelID, messageID: data.messageID, reaction: '❌' });
       });
+   }, err => {
+      log.error('failed gs get call:');
+      log.error(err);
    });
 }
 

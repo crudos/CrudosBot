@@ -9,9 +9,8 @@ let TABLE_SPACING = 3;
 /**
    context
       data
-      colWidth
 */
-exports.table = function(context) {
+exports.table = context => {
    return new Table(context);
 }
 
