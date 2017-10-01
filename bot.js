@@ -81,6 +81,12 @@ function gearCommand(data) {
       case 'update':
          updateGear(data);
          break;
+      case 'link':
+         bot.sendMessage({
+            to: data.channelID,
+            message: 'https://docs.google.com/spreadsheets/d/' + GEAR_SCORE_SPREADSHEET_ID
+         });
+         break;
       default:
          helpCommand(data);
          break;
@@ -245,6 +251,7 @@ function updateGear(data) {
    }, err => {
       log.error('failed gs get call:');
       log.error(err);
+      bot.addReaction({ channelID: data.channelID, messageID: data.messageID, reaction: '❌' });
    });
 }
 
@@ -255,6 +262,7 @@ function helpCommand(data) {
       ' Commands:\n' +
       ' show                          Display gear for players, default will only show your own gear\n' +
       '\t all - show all users\n' +
+      ' link                          Link to google spreadsheet.\n' +
       ' update [<stat> <value>]...    Update your gear, include all stats to update.\n' +
       '\t ap - AP\n' +
       '\t awk - Awakening AP\n' +
