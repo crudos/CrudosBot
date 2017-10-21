@@ -18,6 +18,7 @@ let bot = new Discord.Client({
 bot.on('ready', event => {
    log.info('Logged in as: ');
    log.info(bot.username + ' - (' + bot.id + ')');
+   bot.setPresence({ game: { name: 'Black Spreadsheet Online' }});
 });
 
 bot.on('message', (user, userID, channelID, message, event) => {
@@ -33,7 +34,7 @@ bot.on('message', (user, userID, channelID, message, event) => {
       message: message,
    };
 
-   if(message.substring(0, 1) == '.') {
+   if (message.substring(0, 1) == '.') {
       log.info(user + ' ' + userID + ' ' + channelID + ' ' + message + ' ' + event);
       data.args = message.substring(1).split(' ');
       data.command = data.args[0];
@@ -60,6 +61,7 @@ bot.on('message', (user, userID, channelID, message, event) => {
 
 let GEAR_SCORE_SPREADSHEET_ID = '1BDDFVjVa9S7c-kZd2U9a9tsnPk0otUAuM7p-UoiS-3A';
 let GEAR_SCORE_SPREADSHEET_RANGE = 'Gear';
+let GEAR_SCORE_SPREADSHEET_SORTED_RANGE = 'SortedGear';
 
 function gearCommand(data) {
    log.debug('gearCommand');
@@ -78,6 +80,8 @@ function gearCommand(data) {
       case 'show':
          showGear(data);
          break;
+      case 'u':
+      case 'upd':
       case 'update':
          updateGear(data);
          break;
@@ -95,9 +99,10 @@ function gearCommand(data) {
 
 function getGear(data, params) {
    log.debug('getGear');
+
    let getParams = {
       spreadsheetId: GEAR_SCORE_SPREADSHEET_ID,
-      range: GEAR_SCORE_SPREADSHEET_RANGE,
+      range: params.sorted ? GEAR_SCORE_SPREADSHEET_SORTED_RANGE : GEAR_SCORE_SPREADSHEET_RANGE,
    };
 
    return new Promise((fulfill, reject) => {
@@ -143,7 +148,7 @@ function findUser(data, result) {
 function showGear(data) {
    log.debug('showGear');
    let showAll = data.args[2] && data.args[2].indexOf('all') != -1;
-   let promise = getGear(data, { findUser: !showAll });
+   let promise = getGear(data, { findUser: !showAll, sorted: true });
 
    promise.then(result => {
       log.debug(data);
@@ -165,7 +170,7 @@ function showGear(data) {
 
 function updateGear(data) {
    log.debug('updateGear');
-   let promise = getGear(data, { findUser: true });
+   let promise = getGear(data, { findUser: true, sorted: false });
 
    promise.then(result => {
       if (!result) {
@@ -185,7 +190,8 @@ function updateGear(data) {
          awk: 'C',
          dp: 'D',
          gs: 'E',
-         awkgs: 'F'
+         awkgs: 'F',
+         aut: 'G',
       }
 
       let sheetUpdate = [];
@@ -196,10 +202,11 @@ function updateGear(data) {
          userSheetRow = result.values.length + 1;
          // gear score functions
          sheetUpdate.push({
-            range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.gs + userSheetRow + ':' + gs_col.awkgs + userSheetRow,
+            range: GEAR_SCORE_SPREADSHEET_RANGE + '!' + gs_col.gs + userSheetRow + ':' + gs_col.aut + userSheetRow,
             values: [[
                '=SUM(' + gs_col.ap + userSheetRow + ',' + gs_col.dp + userSheetRow + ')',
-               '=SUM(' + gs_col.awk + userSheetRow + ',' + gs_col.dp + userSheetRow + ')']]
+               '=SUM(' + gs_col.awk + userSheetRow + ',' + gs_col.dp + userSheetRow + ')',
+               0]]
          });
          // player name
          sheetUpdate.push({
@@ -221,6 +228,8 @@ function updateGear(data) {
             columnToUpdate = gs_col.awk;
          } else if (statKey.indexOf('dp') != -1) {
             columnToUpdate = gs_col.dp;
+         } else if (statKey.indexOf('aut') != -1) {
+            columnToUpdate = gs_col.aut;
          }
 
          if (columnToUpdate) {
@@ -259,14 +268,27 @@ function helpCommand(data) {
    let helpMessage =
       '```\n'+
       'Usage: .gear <command> <arguments>\n\n' +
-      ' Commands:\n' +
-      ' show                          Display gear for players, default will only show your own gear\n' +
-      '\t all - show all users\n' +
+      'Commands:\n' +
       ' link                          Link to google spreadsheet.\n' +
+      ' show                          Display gear.\n' +
+      '\t all - show all users\n' +
       ' update [<stat> <value>]...    Update your gear, include all stats to update.\n' +
       '\t ap - AP\n' +
       '\t awk - Awakening AP\n' +
       '\t dp - DP\n' +
       '```';
+
+   let updateHelpMessage =
+      '```\n'+
+      'Update your gear, include all stats to update.\n' +
+      '\tCommand: u, upd, or update\n' +
+      '\tArguments: list of <stat value>\n' +
+      '\t\t ap - AP\n' +
+      '\t\t awk - Awakening AP\n' +
+      '\t\t dp - DP\n' +
+      '\n' +
+      'Example: .gear u ap 100 awk 100\n' +
+      '```';
+
    bot.sendMessage({ to: data.channelID, message: helpMessage });
 }
